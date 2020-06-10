@@ -77,7 +77,6 @@ def get_preorder(tree):
 def get_lowers(tree):
     lowers = [0 for x in tree.postorder_node_iter()]
     ll = {}
-
     for node in tree.postorder_node_iter():
         if node.is_leaf():
             ll[node] = node.date
@@ -87,7 +86,6 @@ def get_lowers(tree):
     for node in tree.preorder_node_iter():
         lowers[node.index-1] = ll[node]
     return lowers
-
 
 def get_dna_leaves_partials(alignment):
     tipdata = numpy.zeros((len(alignment), alignment.sequence_size, 4), dtype=numpy.int)
@@ -254,7 +252,10 @@ def parse_log(inputfile, alpha=0.05, tree=None):
         'netDiversificationRate': 'net diversification rate',
         'relativeExtinctionRate': 'relative extinction rate',
         'ucln_mean': 'UCLN mean',
-        'ucln_stdev': 'UCLN stdev'
+        'ucln_stdev': 'UCLN stdev',
+        'R': 'effective reproductive number',
+        'delta': 'rate of becoming uninfectious',
+        's': 'probability of an individual being sampled'
     }
     with open(inputfile) as fp:
         for line in fp:
@@ -334,4 +335,17 @@ def parse_log(inputfile, alpha=0.05, tree=None):
                 sums.append(sum_blens)
             mean, median, low, high = descriptive_stats(sums, alpha)
             print('Tree length mean: {} {}% CI: ({},{})'.format(mean, (1-alpha)*100, low, high))
+
+        def parse_bdsky(var):
+            if f'{var}.1' in header:
+                print(var)
+                for h in header:
+                    if h.startswith(f'{var}.'):
+                        d = data[header.index(h)]
+                        mean, median, low, high = descriptive_stats(d, alpha)
+                        print('  {} mean: {:.3E} {}% CI: ({:.3E},{:.3E})'.format(h, mean, (1-alpha)*100, low, high))
+
+        parse_bdsky('R')
+        parse_bdsky('delta')
+        parse_bdsky('s')
 
