@@ -8,10 +8,10 @@ import sys
 from generate_script import get_model
 import utils
 
-epi = 'fluA'
+epi = 'sanity'
 stem = f'../examples/{epi}/' #Stem for files
 
-_model = 'GTR'
+_model = 'HKY'
 _tree = f'{stem}{epi}.tree'
 _input = f'{stem}{epi}.fa' #sequence file
 _heterochronous = True 
@@ -19,7 +19,12 @@ _clock = 'strict' #choices=['strict', 'ace', 'acln', 'acg', 'aoup', 'ucln', 'uce
 _estimate_rate = True #Takes T/F values 
 _rate = 1e-4 #substitution rate
 _lower_root = 0.0 # default=0.0 Lower bound of the root
-_dates = None #Comma-separated (csv) file containing sequence dates with header 'name,date'
+if epi == 'sim':
+    _dates = f'{stem}dates.csv'
+elif epi =='sanity':
+    _dates = None
+else:
+    _dates = 'fasta' #Comma-separated (csv) file containing sequence dates with header 'name,date'
 _categories = 4 #Number of categories default 1
 _invariant = 'weibull' #choices=['weibull', 'discrete'], default='weibull' Weibull or discrete distribution to model rate heterogeneity across sites
 tree_prior = 'skyride'
@@ -115,7 +120,7 @@ if _clock is not None:
         # number of coalescent intervals
         data['I'] = sequence_count - 1
     elif tree_prior == 'bdsky':
-        data['m'] = 10
+        data['m'] = 2
         data['sample_times'] = data['lowers'][:sequence_count]
 
 if _model == 'GTR':
@@ -125,7 +130,7 @@ elif _model == 'HKY':
     data['frequencies_alpha'] = [1, 1, 1, 1]
 
 # Samples output file
-sample_path = f'{stem}fluA'
+sample_path = f'{stem}{epi}'
 tree_path = f'{sample_path}.trees'
 
 binary = _script.replace('.stan', '.pkl')

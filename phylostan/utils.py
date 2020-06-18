@@ -2,6 +2,19 @@ import numpy
 import csv
 
 
+def get_dates(tree):
+    d_internal = {}
+    d_leaf = {}
+    for node in tree.preorder_node_iter():
+        if node.parent_node is None:
+            d_internal[node] = 0
+        else:
+            if node.is_leaf():
+                d_leaf[str(node.taxon).strip("'")] = d_internal[node.parent_node] + node.edge_length
+            else:
+                d_internal[node] = d_internal[node.parent_node] + node.edge_length
+    return d_leaf
+
 def setup_dates(tree, dates=None, heterochronous=False):
     # if a date file is provided then it is heterochronous
     if dates:
@@ -11,13 +24,17 @@ def setup_dates(tree, dates=None, heterochronous=False):
     if heterochronous:
         d = {}
         if dates:
-            with open(dates) as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    d[row['name']] = float(row['date'].strip())
+            if dates == 'fasta':
+                for node in tree.leaf_node_iter():
+                    d[str(node.taxon).strip("'")] = float(str(node.taxon).split('_')[-1][:-1].strip("'"))
+
+            else:
+                with open(dates) as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        d[row['name']] = float(row['date'].strip())
         else:
-            for node in tree.leaf_node_iter():
-                d[str(node.taxon).strip("'")] = float(str(node.taxon).split('_')[-1][:-1])
+            d = get_dates(tree)
 
         max_date = max(d.values())
         min_date = min(d.values())
@@ -36,7 +53,6 @@ def setup_dates(tree, dates=None, heterochronous=False):
         for node in tree.postorder_node_iter():
             node.date = 0.0
         oldest = None
-        
     return oldest
 
 
