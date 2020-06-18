@@ -9,34 +9,34 @@ def setup_dates(tree, dates=None, heterochronous=False):
 
     # parse dates
     if heterochronous:
-        dates = {}
+        d = {}
         if dates:
-            with dates as csvfile:
+            with open(dates) as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    dates[row['name']] = float(row['date'].strip())
+                    d[row['name']] = float(row['date'].strip())
         else:
             for node in tree.leaf_node_iter():
-                dates[str(node.taxon)] = float(str(node.taxon).split('_')[-1][:-1])
+                d[str(node.taxon).strip("'")] = float(str(node.taxon).split('_')[-1][:-1])
 
-        max_date = max(dates.values())
-        min_date = min(dates.values())
+        max_date = max(d.values())
+        min_date = min(d.values())
 
         # time starts at 0
         if min_date == 0:
             for node in tree.leaf_node_iter():
-                node.date = dates[str(node.taxon)]
+                node.date = d[str(node.taxon).strip("'")]
             oldest = max_date
         # time is a year
         else:
             for node in tree.leaf_node_iter():
-                node.date = max_date - dates[str(node.taxon)]
+                node.date = max_date - d[str(node.taxon).strip("'")]
             oldest = max_date - min_date
     else:
         for node in tree.postorder_node_iter():
             node.date = 0.0
         oldest = None
-
+        
     return oldest
 
 

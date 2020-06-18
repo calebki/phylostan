@@ -10,11 +10,10 @@ import utils
 
 epi = 'fluA'
 stem = f'../examples/{epi}/' #Stem for files
-example = 'fluA'
 
 _model = 'GTR'
-_tree = f'{stem}{example}.tree'
-_input = f'{stem}{example}.fa' #sequence file
+_tree = f'{stem}{epi}.tree'
+_input = f'{stem}{epi}.fa' #sequence file
 _heterochronous = True 
 _clock = 'strict' #choices=['strict', 'ace', 'acln', 'acg', 'aoup', 'ucln', 'uced', 'gmrf', 'hsmrf'], Type of clock
 _estimate_rate = True #Takes T/F values 
@@ -23,8 +22,8 @@ _lower_root = 0.0 # default=0.0 Lower bound of the root
 _dates = None #Comma-separated (csv) file containing sequence dates with header 'name,date'
 _categories = 4 #Number of categories default 1
 _invariant = 'weibull' #choices=['weibull', 'discrete'], default='weibull' Weibull or discrete distribution to model rate heterogeneity across sites
-tree_prior = 'bdsky'
-_script = f'{stem}{example}-GTR-W4.stan' #STAN script files
+tree_prior = 'skyride'
+_script = f'skyride-HKY-W4.stan' #STAN script files
 _compile = True # 'action="store_true", help="""Compile Stan script"""
 _algorithm = 'vb' #algorithm choices=['vb', 'nuts', 'hmc'] default='vb'
 _iter = 100000 #Maximum number of iterations for variational inference or number of iterations for NUTS and HMC algorithms
