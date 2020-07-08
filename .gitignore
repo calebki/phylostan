@@ -1,3 +1,6 @@
 .idea
 *.pyc
 bin/*
+examples/sim/.RData
+examples/sim/.Rhistory
+examples/sim/output
