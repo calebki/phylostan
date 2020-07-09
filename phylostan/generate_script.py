@@ -499,6 +499,109 @@ def skygrid_coalescent(heterochronous):
 	else:
 		return skygrid_coalescent_str.format('', '0')
 
+def bdsky():
+	bdsky_str = """
+	real bdsky_log(real[] heights, vector R, vector delta, vector s, 
+				   vector rho, real[] t, int[,] map, 
+				   vector N, real[] lowers, real[] y){{
+		vector lambda = R * delta;
+		vector psi = s * delta;
+		vector mu = delta - psi;
+		
+		int S = size(heights)+1; // number of leaves from the number of internal nodes
+		int nodeCount = size(heights) + S;
+
+		int m = size(mu)
+		vector A = sqrt(square(lambda - u - psi) + 4 * lambda * psi)
+		vector B[m+1];
+		B[m+1] = 1 
+
+		// Times is different here than in in skyride
+
+		// Define vCount. Number of 2 degree vertices in at time t_i
+		// Defined as n_i in Stadler 2013
+
+		int vCount[m] = rep_array(0, m);
+		for ( i in 1:nodeCount ){{
+			if(map[i,1] > S){{
+				l = t[m] - heights[map[i,2]-S];
+				u = t[m] - heights[map[i,1]-S];
+			}}
+			else{{
+				l = t[m] - heights[map[i,2]-S]
+				u = t[m] - lowers[i]
+			}}
+			for ( j in 1:m ){{
+				if ((u > t[j]) && (t[j] > l)){{
+					vCount[j] += 1
+				}}
+			}}
+		}}
+
+		real x[S-1] = t[m] - sort_desc(heights)
+
+		// Define I(x_i) and I(y_i)
+		int i = 1;
+		int j = 1;
+		vector[S-1] Ix;
+		while (j < S-1){{
+			while (t[j] < x[i]){{
+				j += 1;
+			}}
+			Ix[i] = j
+			i += 1;
+		}}
+
+		int n = size(y) // S = N + n
+		i = 1;
+		j = 1;
+		vector[n] Iy;
+		while (j < n){{
+			while (t[j] < y[i]){{
+				j += 1;
+			}}
+			Iy[i] = j
+			i += 1;
+		}}
+
+		// Recursion for B and p
+		for( i in m:1 ){{
+			int sum_params = lambda[i] + mu[i] + psi[i]
+			B[i] = ((1-2*(1-rho[i])*p[i+1]) * sum_params)/A[i]
+			real first = exp(A[i] * (times[i]-times[i-1])) * (1 + B[i])
+			real second = 1 - B[i]
+			rho[i] = (sum_params - A[i] * (first - second) / (first + second))/ (2 * lambda[i])
+		}}
+
+		real q(int i, real t){{
+			real e = exp(-A[i]*(t-times[i]))
+			real d = square(e * (1 + B[i]) + (1 - B[i]))
+			return 4 * e / d
+		}}
+
+		real logP = log(q(1,0) / (1 - p[1]));
+		for ( i in 1:S-1 ){{
+			logP += log(lambda[Ix[i]])
+			logP += log(q(Ix[i],x[i]))
+		}}
+
+		for ( i in 1:n ){{
+			logP += log(psi[Iy[i]])
+			logP -= log(q(Iy[i], y[i]))
+		}}
+
+		for ( i in 1:m ){{
+			logP += N[i] * log(rho[i])
+			logP += n[i] * log((1-rho[i]) + q(i+1,t[i]))
+		}}
+		
+
+		return logP;
+	}}
+	}}
+	"""
+	return bdsky_str
+
 
 def GMRF():
 	gmrf_logP = """
@@ -1277,6 +1380,25 @@ def get_model(params):
 				model_priors.append('heights ~ skygrid_coalescent(thetas, map, grid);')
 			model_priors.append('thetas ~ gmrf(tau);')
 			model_priors.append('tau ~ gamma(0.001, 0.001);')
+		# elif params.coalescent == 'bdsky':
+		# 	functions_block.append(bdsky())
+		# 	data_block.append('int m; // number of intervals')
+		# 	data_block.append('vector<lower=0>[m] t; // time discretization')
+		# 	data_block.append('int<lower=0>[m] N // number of tips sampled at t_i')
+		# 	data_block.append('int n; // number of sequentially sampled tips')
+		# 	data_block.append('vector<lower=0>[n] y; // sampling time of sequentially sampled tips')
+			
+		# 	parameters_block.append('vector<lower=0>[m] R; // effective reproductive number')
+		# 	parameters_block.append('vector<lower=0>[m] delta; // become uninfectious rate')
+		# 	parameters_block.append('vector<lower=0>[m] s; // probability of being sampled')
+		# 	parameters_block.append('vector<lower=0>[m] rho; // sampling rate at each t_i')
+
+		# 	model_priors.append('heights ~ bdsky(R, delta, s, rho, t, map, N, lowers, y)')
+		# 	model_priors.append('R ~ lognormal(0.5, 1)')
+		# 	model_priors.append('delta ~ lognormal(-1,1)')
+		# 	model_priors.append('s ~ beta(1,1)')
+		# 	model_priors.append('rho ~ beta(1,99)')
+			
 	else:
 		parameters_block.append('vector<lower=0> [bcount] blens; // branch lengths')
 		model_priors.append('blens ~ exponential(10);')

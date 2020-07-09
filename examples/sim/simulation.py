@@ -37,7 +37,7 @@ _iter = 100000 #Maximum number of iterations for variational inference or number
 #vb parameters
 _samples = 10000 #Number of samples to be drawn from the variational distribution (variational only)
 _eta = None #Not required eta for Stan script (variational only)
-_seeds = np.arange(6,11) #Seed for Stan script
+_seeds = np.arange(11,13) #Seed for Stan script
 _tol_rel_obj = 0.001 #Convergence tolerance on the relative norm of the objective, defaults to 0.001 (variational only)
 _elbo_samples = 100 #Number of samples for Monte Carlo estimate of ELBO (variational only) default 100
 _grad_samples = 1 #Number of samples for Monte Carlo estimate of gradients (variational only) default 1

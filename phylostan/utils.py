@@ -271,7 +271,9 @@ def parse_log(inputfile, alpha=0.05, tree=None):
         'ucln_stdev': 'UCLN stdev',
         'R': 'effective reproductive number',
         'delta': 'rate of becoming uninfectious',
-        's': 'probability of an individual being sampled'
+        's': 'probability of an individual being sampled',
+        'thetas': 'effective population size',
+        'heights': 'coalescence times of nodes'
     }
     with open(inputfile) as fp:
         for line in fp:
@@ -352,7 +354,7 @@ def parse_log(inputfile, alpha=0.05, tree=None):
             mean, median, low, high = descriptive_stats(sums, alpha)
             print('Tree length mean: {} {}% CI: ({},{})'.format(mean, (1-alpha)*100, low, high))
 
-        def parse_bdsky(var):
+        def parse_helper(var):
             if f'{var}.1' in header:
                 print(var)
                 for h in header:
@@ -361,7 +363,10 @@ def parse_log(inputfile, alpha=0.05, tree=None):
                         mean, median, low, high = descriptive_stats(d, alpha)
                         print('  {} mean: {:.3E} {}% CI: ({:.3E},{:.3E})'.format(h, mean, (1-alpha)*100, low, high))
 
-        parse_bdsky('R')
-        parse_bdsky('delta')
-        parse_bdsky('s')
+        parse_helper('R')
+        parse_helper('delta')
+        parse_helper('s')
+        parse_helper('thetas')
+        parse_helper('heights')
+        
 

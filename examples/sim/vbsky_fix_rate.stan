@@ -53,7 +53,7 @@ functions{
 	}
 
 	// Version without rho. No extra sampling effort.
-	real bdsky_log(real[] heights, vector R, vector delta, vector s, //vector rho, 
+	real bdsky_log(real[] heights, vector R, real delta, vector s, //vector rho, 
 				   int m, int[,] map, real x1, //vector N, 
 				   real[] lowers, real[] sample_times){
 
@@ -65,8 +65,8 @@ functions{
 		real sample_times_sorted[S] = sort_desc(sample_times);
 
 		//parameter transform
-		vector[m] lambda = R .* delta;
-		vector[m] psi = s .* delta;
+		vector[m] lambda = R * delta;
+		vector[m] psi = s * delta;
 		vector[m] mu = delta - psi;
 
 		//recursion parameters
@@ -210,7 +210,7 @@ functions{
 
 		// Add Jacobian term for transform
 		for ( k in 1:m ){
-			summands[4*S+m-2+k] = log(square(delta[k]));
+			summands[4*S+m-2+k] = log(square(delta));
 		}
 		// print("jacobian: ", summands[4*S+m-1:]);
 		
@@ -281,7 +281,7 @@ parameters{
 
 	real<lower=0> tau;
 	vector<lower=0>[m] R; // effective reproductive number
-	vector<lower=0>[m] delta; // become uninfectious rate
+	real<lower=0> delta; // become uninfectious rate
 	vector<lower=0,upper=1>[m] s; // probability of being sampled
 }
 
@@ -298,10 +298,10 @@ model{
 	vector [L+S-2] summands;
 
 	heights ~ bdsky(R, delta, s, m, map, x1, lowers, sample_times);
-	R ~ lognormal(0.92, 1);
+	R ~ lognormal(2, 1);
 	// delta ~ lognormal(-1,1);
 	// s ~ beta(1,1);
-	delta ~ lognormal(-1.2,0.01);
+	delta ~ lognormal(-1.2, 1);
 	s ~ beta(100,900);
 	// x1 ~ lognormal(1, 1.25);
 	

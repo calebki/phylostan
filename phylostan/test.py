@@ -13,8 +13,8 @@ stem = f'../examples/{epi}/' #Stem for files
 
 _model = 'HKY'
 _tree = f'{stem}{epi}.tree'
-_input = f'{stem}{epi}.fa' #sequence file
-_heterochronous = True 
+_input = f'{stem}{epi}.nexus' #sequence file
+_heterochronous = False
 _clock = 'strict' #choices=['strict', 'ace', 'acln', 'acg', 'aoup', 'ucln', 'uced', 'gmrf', 'hsmrf'], Type of clock
 _estimate_rate = True #Takes T/F values 
 _rate = 1e-4 #substitution rate
@@ -28,13 +28,13 @@ else:
 _categories = 4 #Number of categories default 1
 _invariant = 'weibull' #choices=['weibull', 'discrete'], default='weibull' Weibull or discrete distribution to model rate heterogeneity across sites
 tree_prior = 'skyride'
-_script = f'skyride-HKY-W4.stan' #STAN script files
+_script = f'skyride-HKY.stan' #STAN script files
 _compile = True # 'action="store_true", help="""Compile Stan script"""
 _algorithm = 'vb' #algorithm choices=['vb', 'nuts', 'hmc'] default='vb'
 _iter = 100000 #Maximum number of iterations for variational inference or number of iterations for NUTS and HMC algorithms
 
 #vb parameters
-_samples = 1000 #Number of samples to be drawn from the variational distribution (variational only)
+_samples = 10000 #Number of samples to be drawn from the variational distribution (variational only)
 _eta = None #Not required eta for Stan script (variational only)
 _seed = 6 #Seed for Stan script
 _tol_rel_obj = 0.001 #Convergence tolerance on the relative norm of the objective, defaults to 0.001 (variational only)
@@ -47,11 +47,9 @@ _cutoff =
 _grid = 
 '''
 
-'''HMC Nuts only
-_chains = 
-_thin = 
-
-'''
+#HMC Nuts only
+_chains = 1
+_thin = 1
 
 taxa = dendropy.TaxonNamespace()
 tree_format = 'newick'

@@ -313,7 +313,7 @@ parameters{
 	real<lower=0> tau;
 	vector<lower=0>[m] R; // effective reproductive number
 	vector<lower=0>[m] delta; // become uninfectious rate
-	vector<lower=0.000001,upper=0.999999>[m] s; // probability of being sampled
+	vector<lower=0,upper=1>[m] s; // probability of being sampled
 	//vector<lower=0>[m] rho; // sampling rate at each t_i
 	simplex[6] rates;
 	simplex[4] freqs;
@@ -331,9 +331,10 @@ transformed parameters{
 				rs[i] = pow(-log(1.0 - (2.0*(i-1)+1.0)/(2.0*C)), 1.0/wshape);
 			}
 			h = sum(rs)/C;
-			for(i in 1:C){
-				rs[i] /= h;		
-			}
+			rs = rs / h;
+			// for(i in 1:C){
+			// 	rs[i] /= h;		
+			// }
 		}
 
 	heights = transform(props, height, map, lowers);
