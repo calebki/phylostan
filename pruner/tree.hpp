@@ -14,6 +14,7 @@ typedef Eigen::Matrix<double, 4, 4> pmat;
 class Node
 {
   public:
+    Node();
     Node(int k);
     Node(int k, int p);
     ~Node();

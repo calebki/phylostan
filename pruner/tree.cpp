@@ -1,19 +1,5 @@
 #include "tree.hpp"
 
-Node::Node(int k)
-{
-  key = k;
-  visited = false;
-  parent = -1;
-
-  left = -1;
-  right = -1;
-
-  p_partial = Eigen::MatrixXd::Constant(4,1,0);
-  q_partial = Eigen::MatrixXd::Constant(4,1,0);
-  P = Eigen::MatrixXd::Constant(4,4,0);
-}
-
 Node::Node(int k, int p)
 {
   key = k;
@@ -27,6 +13,10 @@ Node::Node(int k, int p)
   q_partial = Eigen::MatrixXd::Constant(4,1,0);
   P = Eigen::MatrixXd::Constant(4,4,0);
 }
+
+Node::Node() : Node(-1,-1){}
+
+Node::Node(int k) : Node(k, -1){}
 
 void Node::set_visited(bool b)
 {
@@ -108,7 +98,7 @@ Tree::Tree(int c_p_pair[][2])
 
   preorder.push_back(root);
   postorder.push_back(c_p_pair[n-1][0]);
-  Node_map.insert({root, Node(root)});
+  Node_map[root] = Node(root);
 
   int key;
   int value;
@@ -116,7 +106,7 @@ Tree::Tree(int c_p_pair[][2])
   for (int i = 1; i < n; i++){
     key = c_p_pair[i][0];
     value = c_p_pair[i][1];
-    Node_map.insert({key, Node(key, value)});
+    Node_map[key] = Node(key, value);
     preorder.push_back(key);
     postorder.push_back(c_p_pair[n-1-i][0]);
   }
@@ -131,14 +121,14 @@ void Tree::clear_visited(void)
 
 int Tree::get_other(int key)
 {
-  Node curr = Node_map.at(key);
-  Node parent = Node_map.at(curr.get_parent());
-  Node left = Node_map.at(parent.get_left());
-  Node right = Node_map.at(parent.get_right());
-  if (left.get_key() != key)
-    return left.get_key();
+  Node *curr = &Node_map.at(key);
+  Node *parent = &Node_map.at(curr->get_parent());
+  Node *left = &Node_map.at(parent->get_left());
+  Node *right = &Node_map.at(parent->get_right());
+  if (left->get_key() != key)
+    return left->get_key();
   else
-    return right.get_key();
+    return right->get_key();
 }
 
 void Tree::calc_Ps(v_double blens)
@@ -159,33 +149,33 @@ void Tree::calc_p_partials(pvec *tipdata)
   int key;
   for (int i=0; i<n; i++){
     key = postorder[i];
-    Node curr = Node_map[key];
-    if (curr.is_leaf())
+    Node *curr = &Node_map[key];
+    if (curr->is_leaf())
     {
-      curr.set_p_partial(tipdata[n-1-i]);
+      curr->set_p_partial(tipdata[n-1-i]);
     }
     else
     {
-      Node left = Node_map[curr.get_left()];
-      Node right = Node_map[curr.get_right()];
-      curr.set_p_partial((left.get_P() * left.get_p_partial()).cwiseProduct(right.get_P() * right.get_p_partial()));
+      Node *left = &Node_map[curr->get_left()];
+      Node *right = &Node_map[curr->get_right()];
+      curr->set_p_partial((left->get_P() * left->get_p_partial()).cwiseProduct(right->get_P() * right->get_p_partial()));
     }
-    curr.set_visited(true);
+    curr->set_visited(true);
   }
 }
 
 void Tree::calc_q_partials(pvec pi)
 {
   int key;
-  Node curr = Node_map[root];
-  curr.set_q_partial(pi);
-  curr.set_visited(true);
+  Node *curr = &Node_map[root];
+  curr->set_q_partial(pi);
+  curr->set_visited(true);
   for (int i=1; i<n; i++){
     key = preorder[i];
-    curr = Node_map[key];
-    Node parent = Node_map[curr.get_parent()];
-    Node other = Node_map[get_other(key)];
-    curr.set_q_partial(curr.get_P().transpose()*(parent.get_q_partial().cwiseProduct(other.get_P()*other.get_p_partial())));
-    curr.set_visited(true);
+    curr = &Node_map[key];
+    Node *parent = &Node_map[curr->get_parent()];
+    Node *other = &Node_map[get_other(key)];
+    curr->set_q_partial(curr->get_P().transpose()*(parent->get_q_partial().cwiseProduct(other->get_P()*other->get_p_partial())));
+    curr->set_visited(true);
   } 
 }

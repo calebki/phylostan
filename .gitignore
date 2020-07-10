@@ -11,5 +11,4 @@ bin/*
 phylostan.egg-info
 venv
 mpa.ipynb
-pruner/test.o
-pruner/tree.o
+*.o
