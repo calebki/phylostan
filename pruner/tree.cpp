@@ -9,8 +9,8 @@ Node::Node(int k, int p)
   left = -1;
   right = -1;
 
-  p_partial = Eigen::MatrixXd::Constant(4,1,0);
-  q_partial = Eigen::MatrixXd::Constant(4,1,0);
+  p_partials = Eigen::MatrixXd::Constant(4,g_n_nodes,0);
+  q_partials = Eigen::MatrixXd::Constant(4,g_n_nodes,0);
   P = Eigen::MatrixXd::Constant(4,4,0);
 }
 
@@ -31,19 +31,24 @@ void Node::set_child(int c)
     right = c;
 }
 
-void Node::set_p_partial(pvec p)
+void Node::set_p_partial(int col, p_vec p)
 {
-  p_partial = p;
+  p_partials.col(col) = p;
 }
 
-void Node::set_q_partial(pvec q)
+void Node::set_q_partial(int col, p_vec q)
 {
-  q_partial = q;
+  q_partials.col(col) = q;
 }
 
-void Node::set_P(pmat X)
+void Node::set_P(p_mat X)
 {
   P = X;
+}
+
+bool Node::get_visited()
+{
+  return visited;
 }
 
 int Node::get_key()
@@ -66,17 +71,27 @@ int Node::get_parent()
   return parent;
 }
 
-pvec Node::get_p_partial()
+p_vec Node::get_p_partial(int col)
 {
-  return p_partial;
+  return p_partials.col(col);
 }
 
-pvec Node::get_q_partial()
+p_vec Node::get_q_partial(int col)
 {
-  return q_partial;
+  return q_partials.col(col);
 }
 
-pmat Node::get_P()
+p_mat_d Node::get_p_partials()
+{
+  return p_partials;
+}
+
+p_mat_d Node::get_q_partials()
+{
+  return q_partials;
+}
+
+p_mat Node::get_P()
 {
   return P;
 }
@@ -89,33 +104,72 @@ bool Node::is_leaf(void)
     return false;
 }
 
-Tree::Tree(int c_p_pair[][2])
+Tree::Tree()
 {
-  root = c_p_pair[0][0];
-  n =  sizeof(c_p_pair) / sizeof(c_p_pair[0]);
-  preorder.reserve(n);
-  postorder.reserve(n);
+  on_start();
+  root = g_pairs(0,0);
+  n_nodes = g_pairs.rows();
+  n_tips = (n_nodes + 1) / 2;
+  preorder.reserve(n_nodes);
+  postorder.reserve(n_nodes);
 
   preorder.push_back(root);
-  postorder.push_back(c_p_pair[n-1][0]);
+  postorder.push_back(g_pairs(n_nodes-1,0));
   Node_map[root] = Node(root);
 
-  int key;
-  int value;
+  int child;
+  int parent;
 
-  for (int i = 1; i < n; i++){
-    key = c_p_pair[i][0];
-    value = c_p_pair[i][1];
-    Node_map[key] = Node(key, value);
-    preorder.push_back(key);
-    postorder.push_back(c_p_pair[n-1-i][0]);
+  for (int i = 1; i < n_nodes; i++){
+    child = g_pairs(i,0);
+    parent = g_pairs(i,1);
+    Node_map[child] = Node(child, parent);
+    Node_map[parent].set_child(child);
+    preorder.push_back(child);
+    postorder.push_back(g_pairs(n_nodes-1-i,0));
   }
 }
 
 void Tree::clear_visited(void)
 {
-  for (int i = 1; i < n; i++){
-    Node_map.at(preorder[i]).set_visited(false);
+  for (int i = 1; i < n_nodes; i++){
+    Node_map[preorder[i]].set_visited(#include <iostream>false);
+  }
+}
+
+void Tree::clear_visited(int col)
+{
+  int key;
+  Node *curr;
+  Node *left;
+  Node *right;
+  for (int i = 1; i < n_nodes; i++){
+    key = postorder[i];
+    curr = &Node_map[key];
+    if (curr->is_leaf())
+    {
+      if (g_tipdata[col][key] == g_tipdata[col+1][key])
+      {
+        curr->set_visited(true);
+      }
+      else
+      {
+        curr->set_visited(false);
+      }
+    }
+    else
+    {
+      left = &Node_map[curr->get_left()];
+      right = &Node_map[curr->get_right()];
+      if (left->get_visited() && right->get_visited())
+      {
+        curr->set_visited(true);
+      }
+      else
+      {
+        curr->set_visited(false);
+      }
+    }
   }
 }
 
@@ -131,51 +185,90 @@ int Tree::get_other(int key)
     return right->get_key();
 }
 
-void Tree::calc_Ps(v_double blens)
+void Tree::calc_Ps(Eigen::VectorXd blens)
 {
   int key;
-  for (int i = 0; i < n-1; i++)
+  for (int i = 0; i < n_nodes-1; i++)
   {
     key = preorder[i+1];
-    pmat X = Eigen::MatrixXd::Constant(4,4,0.25 - 0.25*exp(-blens[i]/0.75));
-    pvec d = Eigen::MatrixXd::Constant(4,1,0.75 * exp(-blens[i]/0.75));
+    p_mat X = Eigen::MatrixXd::Constant(4,4,0.25 - 0.25*exp(-blens[i]/0.75));
+    p_vec d = Eigen::MatrixXd::Constant(4,1,0.25 + 0.75*exp(-blens[i]/0.75));
     X.diagonal() = d;
-    Node_map.at(key).set_P(X);
+    Node_map[key].set_P(X);
   }
 }
 
-void Tree::calc_p_partials(pvec *tipdata)
+void Tree::calc_p_partials(int col)
 {
   int key;
-  for (int i=0; i<n; i++){
+  for (int i=0; i<n_nodes; i++){
     key = postorder[i];
     Node *curr = &Node_map[key];
-    if (curr->is_leaf())
+    if (!curr->get_visited())
     {
-      curr->set_p_partial(tipdata[n-1-i]);
+      if (curr->is_leaf())
+      {
+        curr->set_p_partial(col, g_tipdata[col][key]);
+      }
+      else
+      {
+        Node *left = &Node_map[curr->get_left()];
+        Node *right = &Node_map[curr->get_right()];
+        curr->set_p_partial(col, (left->get_P() * left->get_p_partial(col)).cwiseProduct(right->get_P() * right->get_p_partial(col)));
+      }
+      curr->set_visited(true);
     }
-    else
-    {
-      Node *left = &Node_map[curr->get_left()];
-      Node *right = &Node_map[curr->get_right()];
-      curr->set_p_partial((left->get_P() * left->get_p_partial()).cwiseProduct(right->get_P() * right->get_p_partial()));
-    }
-    curr->set_visited(true);
   }
 }
 
-void Tree::calc_q_partials(pvec pi)
+void Tree::calc_q_partials(int col)
 {
   int key;
   Node *curr = &Node_map[root];
-  curr->set_q_partial(pi);
-  curr->set_visited(true);
-  for (int i=1; i<n; i++){
+  curr->set_q_partial(col, g_pi);
+  //curr->set_visited(true);
+  for (int i=1; i<n_nodes; i++){
     key = preorder[i];
     curr = &Node_map[key];
     Node *parent = &Node_map[curr->get_parent()];
     Node *other = &Node_map[get_other(key)];
-    curr->set_q_partial(curr->get_P().transpose()*(parent->get_q_partial().cwiseProduct(other->get_P()*other->get_p_partial())));
-    curr->set_visited(true);
+    curr->set_q_partial(col, curr->get_P().transpose()*(parent->get_q_partial(col).cwiseProduct(other->get_P()*other->get_p_partial(col))));
+    //curr->set_visited(true);
   } 
 }
+
+std::map<int,Node> Tree::get_Node_map(void)
+{
+  return Node_map;
+}
+
+v_int Tree::get_preorder(void)
+{
+  return preorder;
+}
+
+v_int Tree::get_postorder(void)
+{
+  return postorder;
+}
+
+int Tree::get_root(void)
+{
+  return root;
+}
+
+int Tree::get_n_nodes(void)
+{
+  return n_nodes;
+}
+
+int Tree::get_n_tips(void)
+{
+  return n_tips;
+}
+
+int Tree::get_n_cols(void)
+{
+  return n_cols;
+}
+
