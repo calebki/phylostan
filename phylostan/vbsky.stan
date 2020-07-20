@@ -17,8 +17,9 @@ functions{
 		}
 		return heights;
 	}
+	
 
-	// calculate q
+// calculate q
 	real q_helper(vector A, vector B, vector t, int i, real s){
 		if (t[i] == s){
 			return 1;
@@ -52,20 +53,20 @@ functions{
 	}
 
 	// Version without rho. No extra sampling effort.
-	real bdsky_log(real[] heights, vector R, vector delta, vector s, //vector rho, 
-				   real x1, int m, int[,] map, //vector N, 
+	real bdsky_log(real[] heights, vector R, real delta, vector s, //vector rho, 
+				   int m, int[,] map, real x1, //vector N, 
 				   real[] lowers, real[] sample_times){
 
 		int S = size(heights)+1; // number of leaves from the number of internal nodes
 		int nodeCount = size(heights) + S;
 
 		real heights_sorted[S-1] = sort_desc(heights);
-		real height = heights_sorted[1];
+		real height = heights_sorted[1] + x1;
 		real sample_times_sorted[S] = sort_desc(sample_times);
 
 		//parameter transform
-		vector[m] lambda = R .* delta;
-		vector[m] psi = s .* delta;
+		vector[m] lambda = R * delta;
+		vector[m] psi = s * delta;
 		vector[m] mu = delta - psi;
 
 		//recursion parameters
@@ -76,7 +77,7 @@ functions{
 		real q0;
 		
 		// helper parameters to calculate likelihood
-		real increment = (height + x1)/m;
+		real increment = height/m + 0.001;
 		vector[m] t;
 		int vCount[m-1];
 		real l;
@@ -135,6 +136,9 @@ functions{
 			y[k] = height - sample_times_sorted[k];
 		}
 		y[S] = height - sample_times_sorted[S];
+		// print("x:", x)
+		// print("y:", y)
+		// print("t:", t)
 		
 		// Define I(x_i) and I(y_i)
 		Ix = I(t, x);
@@ -206,7 +210,7 @@ functions{
 
 		// Add Jacobian term for transform
 		for ( k in 1:m ){
-			summands[4*S+m-2+k] = log(square(delta[k]));
+			summands[4*S+m-2+k] = log(square(delta));
 		}
 		// print("jacobian: ", summands[4*S+m-1:]);
 		
@@ -227,50 +231,22 @@ functions{
 	}
 
 
-	matrix[] calculate_gtr_p_matrices(vector freqs, vector rates, vector blens, vector rs){
-		int C = rows(rs);
-		int bcount = rows(blens);
-		matrix[4,4] pmats[bcount*C]; // probability matrices
+	matrix[] calculate_jc69_p_matrices(vector blens){
 		
-		matrix[4,4] Q; // rate matrix
-		matrix[4,4] P2 = diag_matrix(sqrt(freqs));        // diagonal sqrt frequencies
-		matrix[4,4] P2inv = diag_matrix(1.0 ./ sqrt(freqs)); // diagonal inverse sqrt frequencies
-		matrix[4,4] A; // another symmetric matrix
-		vector[4] eigenvalues;
-		matrix[4,4] eigenvectors;
-		matrix[4,4] m1;
-		matrix[4,4] m2;
-		// symmetric rate matrix
-		matrix[4,4] R = [[0.0, rates[1], rates[2], rates[3]],
-						 [rates[1], 0.0, rates[4], rates[5]],
-						 [rates[2], rates[4], 0.0, rates[6]],
-						 [rates[3], rates[5], rates[6], 0.0]];
-		real s = 0.0;
+		int bcount = rows(blens);
+		matrix[4,4] pmats[bcount]; // probability matrices
 		int index = 1;
-
-		Q = R * diag_matrix(freqs);
-		for (i in 1:4) {
-			Q[i,i] = 0.0;
-			Q[i,i] = -sum(Q[i,1:4]);
-			s -= Q[i,i] * freqs[i];
-		}
-		Q /= s;
-
-		A = P2 * Q * P2inv;
-
-		eigenvalues = eigenvalues_sym(A);
-		eigenvectors = eigenvectors_sym(A);
-
-		m1 = P2inv * eigenvectors;
-		m2 = eigenvectors' * P2;
-
-		for(c in 1:C){
-			for( b in 1:bcount ){
-				pmats[index] = m1 * diag_matrix(exp(eigenvalues*blens[b]*rs[c])) * m2;
+		real d;
+		
+			for( b in 1:bcount ) {
+				pmats[index] = rep_matrix(0.25 - 0.25*exp(-blens[b]/0.75), 4, 4);
+				d = 0.25 + 0.75*exp(-blens[b]/0.75);
+				for( i in 1:4 ) {
+					pmats[index][i,i] = d;
+				}
 				index += 1;
 			}
-		}
-
+		
 		return pmats;
 	}
 	
@@ -279,82 +255,55 @@ functions{
 data{
 	int <lower=0> L;                      // alignment length
 	int <lower=0> S;                      // number of tips
-	real<lower=0,upper=1> tipdata[S,L,4]; // alignment as partials
+	vector<lower=0,upper=1>[4] tipdata[S,L]; // alignment as partials
 	int <lower=0,upper=2*S> peel[S-1,3];  // list of nodes for peeling
 	real weights[L];
 	int map[2*S-1,2];                     // list of node in preorder [node,parent]
-	int C;
+	real <lower=0> rate;
 	real lower_root;
 	real lowers[2*S-1]; // list of lower bounds for each internal node (for reparametrization)
-	int m; // number of intervals
+	int <lower=1> m; // number of intervals
+	real <lower=0> x1; //length of edge above root
 	// vector<lower=0>[m] t; // time discretization
-	// int<lower=0>[m] N // number of tips sampled at t_i
-	// int n; // number of sequentially sampled tips
 	real<lower=0> sample_times[S]; // sampling time of sequentially sampled tips
-	vector<lower=0>[4] frequencies_alpha; // parameters of the prior on frequencies
-	vector<lower=0>[6] rates_alpha;       // parameters of the prior on rates
 }
 
 transformed data{
 	int bcount = 2*S-2; // number of branches
 	int nodeCount = 2*S-1; // number of nodes
 	int pCount = S-2; // number of proportions
+	vector[4] freqs = rep_vector(0.25,4);
 }
 
 parameters{
-	real<lower=0.1> wshape;
 	real <lower=0,upper=1> props[pCount]; // proportions
-	real <lower=0> rate;
 	real <lower=lower_root> height; // root height
+
 	real<lower=0> tau;
-	
-	real <lower=0> x1; //length of edge above root
 	vector<lower=0>[m] R; // effective reproductive number
-	vector<lower=0>[m] delta; // become uninfectious rate
+	real<lower=0> delta; // become uninfectious rate
 	vector<lower=0,upper=1>[m] s; // probability of being sampled
-	//vector<lower=0>[m] rho; // sampling rate at each t_i
-	simplex[6] rates;
-	simplex[4] freqs;
 }
 
 transformed parameters{
-	vector[C] ps = rep_vector(1.0/C, C);
-	vector[C] rs;
 	real <lower=0> heights[S-1];
-
-	
-		{
-			real h = 0;
-			for(i in 1:C){
-				rs[i] = pow(-log(1.0 - (2.0*(i-1)+1.0)/(2.0*C)), 1.0/wshape);
-			}
-			h = sum(rs)/C;
-			rs = rs / h;
-			// for(i in 1:C){
-			// 	rs[i] /= h;		
-			// }
-		}
 
 	heights = transform(props, height, map, lowers);
 }
 
 model{
-	real probs[C];
-	vector[4] partials[C,2*S,L];   // partial probabilities for the S tips and S-1 internal nodes
-	matrix[4,4] pmats[bcount*C]; // finite-time transition matrices for each branch
+	vector[4] partials[S,L];   // partial probabilities for the S tips and S-1 internal nodes
+	matrix[4,4] pmats[bcount]; // finite-time transition matrices for each branch
 	vector [bcount] blens; // branch lengths
+	vector [L+S-2] summands;
 
-	wshape ~ exponential(1.0);
-	rate ~ exponential(1000);
-	heights ~ bdsky(R, delta, s, x1, m, map, lowers, sample_times);
-	R ~ lognormal(0.5, 1);
-	delta ~ lognormal(-1,1);
-	s ~ beta(1,1);
-	//rho ~ beta(1,99);
-	x1 ~ lognormal(1, 1.25);
-	rates ~ dirichlet(rates_alpha);
-	freqs ~ dirichlet(frequencies_alpha);
-
+	heights ~ bdsky(R, delta, s, m, map, x1, lowers, sample_times);
+	R ~ lognormal(2, 1);
+	// delta ~ lognormal(-1,1);
+	// s ~ beta(1,1);
+	delta ~ lognormal(-1.2, 1);
+	s ~ beta(100,900);
+	// x1 ~ lognormal(1, 1.25);
 	
 	// populate blens from heights array in preorder
 	for( j in 2:nodeCount ){
@@ -367,32 +316,32 @@ model{
 		}
 	}
 
-	pmats = calculate_gtr_p_matrices(freqs, rates, blens, rs);
-	
-	// copy tip data into node probability vector
-	for( n in 1:S ) {
-		for( i in 1:L ) {
-			for( a in 1:4 ) {
-				for(c in 1:C){
-					partials[c,n,i][a] = tipdata[n,i,a];
-				}
-			}
-		}
-	}
+	pmats = calculate_jc69_p_matrices(blens);
 
 
 	// calculate tree likelihood
 	for( i in 1:L ) {
 		for( n in 1:(S-1) ) {
-			for(c in 1:C){
-				partials[c,peel[n,3],i] = (pmats[peel[n,1]+(c-1)*bcount]*partials[c,peel[n,1],i]) .* (pmats[peel[n,2]+(c-1)*bcount]*partials[c,peel[n,2],i]);
+			if (peel[n,1] <= S){
+				if (peel[n,2] <= S){
+					partials[peel[n,3]-S,i] = (pmats[peel[n,1]]*tipdata[peel[n,1],i]) .* (pmats[peel[n,2]]*tipdata[peel[n,2],i]);
+				}
+				else{
+					partials[peel[n,3]-S,i] = (pmats[peel[n,1]]*tipdata[peel[n,1],i]) .* (pmats[peel[n,2]]*partials[peel[n,2]-S,i]);
+				}
+			}
+			else{
+				if (peel[n,2] <= S){
+					partials[peel[n,3]-S,i] = (pmats[peel[n,1]]*partials[peel[n,1]-S,i]) .* (pmats[peel[n,2]]*tipdata[peel[n,2],i]);
+				}
+				else{
+					partials[peel[n,3]-S,i] = (pmats[peel[n,1]]*partials[peel[n,1]-S,i]) .* (pmats[peel[n,2]]*partials[peel[n,2]-S,i]);
+				}
 			}
 		}
-		for(c in 1:C){
-			probs[c] = ps[c] * sum(partials[c,peel[S-1,3],i] .* freqs);
-		}
+		partials[S,i] = partials[peel[S-1,3]-S,i] .* freqs;
 		// add the site log likelihood
-		target += log(sum(probs))*weights[i];
+		summands[i] = log(sum(partials[S,i]))*weights[i];
 	}
 
 	
@@ -400,10 +349,12 @@ model{
 	for( i in 2:nodeCount ){
 		// skip leaves
 		if(map[i,1] > S ){
-			target += log(heights[map[i,2]-S] - lowers[map[i,1]]);
+			summands[map[i,1]-S+L] = log(heights[map[i,2]-S] - lowers[map[i,1]]);
 		}
 	}
+	target += sum(summands);
 
+}
 }
 
 

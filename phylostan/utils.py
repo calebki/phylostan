@@ -114,6 +114,44 @@ def get_dna_leaves_partials(alignment):
         s += 1
     return tipdata
 
+def create_hpp(alignment, tree):
+    dna_map = {'a': '1, 0, 0, 0', 'c': '0, 1, 0, 0', 'g': '0, 0, 1, 0', 't': '0, 0, 0, 1'}
+    code_str += '#include "tree.hpp" \n'
+    code_str += "\n"
+    code_str += f'int g_n_tips = {len(alignment)}; \n'
+    code_str += f'int g_n_nodes = 2*g_n_tips-1; \n'
+    code_str += f'int g_n_cols = {alignment.sequence_size}; \n'
+    code_str += 'pair_mat g_pairs; \n'
+    code_str += 'vv_p_vec g_tipdata; \n'
+    code_str += 'g_pi \n \n'
+    code_str += '''
+    void on_start(void)
+    {
+        g_tipdata.reserve(g_n_cols);
+        for (int i=0; i<g_n_cols; i++) 
+        {
+            g_tipdata[i].reserve(g_n_tips);   
+        }       
+    '''
+
+    s = 0
+    for name in alignment:
+        for i, c in enumerate(alignment[name].symbols_as_string()):
+            p_vec = dna_map.get(c.lower(), '1, 1, 1, 1')
+            code_str += f'g_tipdata[{i}][{s}] << {p_vec}; \n'
+        s += 1
+    code_str += 'g_pairs.resize(g_n_nodes, 2); \n'
+    code_str += f'g_pairs << {pairs[0][0]}, {-1};'
+
+    pairs = get_preorder(tree)
+    n = len(pairs)
+    for i in range(1,n):
+        code_str += f'\t\t {pairs[i][0]}, {pairs[i][1]};'
+    code_str += 'g_pi << 0.25, 0.25, 0.25, 0.25;'
+    tipfile = open("tip.hpp", "w")
+    tipfile.write(code_str)
+    tipfile.close()
+
 
 def get_dna_leaves_partials_compressed(alignment):
     weights = []

@@ -155,7 +155,7 @@ for seed in _seeds:
 
         fit = sm.vb(data=data, tol_rel_obj=_tol_rel_obj, elbo_samples=_elbo_samples, grad_samples=_grad_samples,
                     iter=_iter, sample_file=sample_path, diagnostic_file=sample_path + ".diag",
-                    algorithm=_variational, **stan_args)
+                    algorithm=_variational, **stan_args, verbose=True)
 
         # parse the log file
         utils.convert_samples_to_nexus(tree, sample_path, tree_path, _rate)

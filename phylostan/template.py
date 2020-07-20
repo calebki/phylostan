@@ -13,11 +13,11 @@ stem = f'../examples/{epi}/' #Stem for files
 
 _model = 'HKY'
 _tree = f'{stem}{epi}.tree'
-_input = f'{stem}{epi}.nexus' #sequence file
-_heterochronous = False
+_input = f'{stem}{epi}.fa' #sequence file
+_heterochronous = True
 _clock = 'strict' #choices=['strict', 'ace', 'acln', 'acg', 'aoup', 'ucln', 'uced', 'gmrf', 'hsmrf'], Type of clock
-_estimate_rate = True #Takes T/F values 
-_rate = 1e-4 #substitution rate
+_estimate_rate = False #Takes T/F values 
+_rate = 1.0 #substitution rate
 _lower_root = 0.0 # default=0.0 Lower bound of the root
 if epi == 'sim':
     _dates = f'{stem}dates.csv'
@@ -25,9 +25,9 @@ elif epi =='sanity':
     _dates = None
 else:
     _dates = 'fasta' #Comma-separated (csv) file containing sequence dates with header 'name,date'
-_categories = 4 #Number of categories default 1
+_categories = 1 #Number of categories default 1
 _invariant = 'weibull' #choices=['weibull', 'discrete'], default='weibull' Weibull or discrete distribution to model rate heterogeneity across sites
-tree_prior = 'skyride'
+tree_prior = 'bdsky'
 _script = f'skyride-HKY.stan' #STAN script files
 _compile = True # 'action="store_true", help="""Compile Stan script"""
 _algorithm = 'vb' #algorithm choices=['vb', 'nuts', 'hmc'] default='vb'

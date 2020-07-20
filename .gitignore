@@ -12,3 +12,4 @@ phylostan.egg-info
 venv
 mpa.ipynb
 *.o
+*test*

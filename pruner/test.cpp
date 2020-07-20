@@ -14,6 +14,7 @@ void print(std::vector <int> const &a) {
 int main () {
 
   Eigen::VectorXd blens;
+  blens.resize(g_n_nodes-1);
   blens << 1,2,1,1;
 
   Tree t = Tree();
@@ -21,7 +22,12 @@ int main () {
   print(t.get_postorder());
   t.calc_p_partials(0);
   t.calc_q_partials(0);
-  t.clear_visited(0);
+  t.clear_visited(0)  ;
+  for(auto elem : t.get_Node_map())
+  {
+    std::cout << "Node: " << elem.first << std::endl;
+    std::cout << elem.second.get_visited() << std::endl;
+  }
   t.calc_p_partials(1);
   t.calc_q_partials(1);
 
@@ -35,7 +41,7 @@ int main () {
     std::cout << elem.second.get_p_partials() << std::endl;
     std::cout << "q partial:" << std::endl;
     std::cout << elem.second.get_q_partials() << std::endl; 
-    std::cout << "lik: " << elem.second.get_p_partials().cwiseProduct(elem.second.get_q_partials()) << std::endl; 
+    std::cout << "lik: " << elem.second.get_p_partials().cwiseProduct(elem.second.get_q_partials()).colwise().sum() << std::endl; 
   }
   return 0;
 }

@@ -1,5 +1,5 @@
-#ifndef TREE_H
-#define TREE_H
+#ifndef PRUNER_H
+#define PRUNER_H
 #include <iostream>
 #include <map>
 #include <vector>
@@ -17,6 +17,8 @@ typedef Eigen::Matrix<int, Eigen::Dynamic, 2> pair_mat;
 typedef std::vector<p_vec> v_p_vec;
 typedef std::vector<v_p_vec> vv_p_vec;
 
+// implemented in tip.cpp
+
 extern int g_n_tips;
 extern int g_n_nodes; 
 extern int g_n_cols;
@@ -25,6 +27,8 @@ extern vv_p_vec g_tipdata;
 extern p_vec g_pi;
 
 void on_start(void);
+
+// implemented in tree.cpp
 
 class Node
 {
@@ -97,5 +101,11 @@ class Tree
     v_int preorder;
     v_int postorder;
 };
+
+// implemented in pruner.cpp
+
+double loglik (const Eigen::VectorXd &x, std::ostream* pstream);
+std::vector<double> loglik_grad (const Eigen::VectorXd &x, std::ostream* pstream);
+var loglik (const Eigen::Matrix<var, -1, 1>& x, std::ostream* pstream);
 
 #endif

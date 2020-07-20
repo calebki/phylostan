@@ -1,4 +1,4 @@
-#include "tree.hpp"
+#include "pruner.hpp"
 
 Node::Node(int k, int p)
 {
@@ -9,8 +9,8 @@ Node::Node(int k, int p)
   left = -1;
   right = -1;
 
-  p_partials = Eigen::MatrixXd::Constant(4,g_n_nodes,0);
-  q_partials = Eigen::MatrixXd::Constant(4,g_n_nodes,0);
+  p_partials = Eigen::MatrixXd::Constant(4,g_n_cols,0);
+  q_partials = Eigen::MatrixXd::Constant(4,g_n_cols,0);
   P = Eigen::MatrixXd::Constant(4,4,0);
 }
 
@@ -132,8 +132,8 @@ Tree::Tree()
 
 void Tree::clear_visited(void)
 {
-  for (int i = 1; i < n_nodes; i++){
-    Node_map[preorder[i]].set_visited(#include <iostream>false);
+  for (int i = 0; i < n_nodes; i++){
+    Node_map[preorder[i]].set_visited(false);
   }
 }
 
@@ -143,12 +143,12 @@ void Tree::clear_visited(int col)
   Node *curr;
   Node *left;
   Node *right;
-  for (int i = 1; i < n_nodes; i++){
+  for (int i = 0; i < n_nodes; i++){
     key = postorder[i];
     curr = &Node_map[key];
     if (curr->is_leaf())
     {
-      if (g_tipdata[col][key] == g_tipdata[col+1][key])
+      if (g_tipdata[col][key-1] == g_tipdata[col+1][key-1])
       {
         curr->set_visited(true);
       }
@@ -208,7 +208,7 @@ void Tree::calc_p_partials(int col)
     {
       if (curr->is_leaf())
       {
-        curr->set_p_partial(col, g_tipdata[col][key]);
+        curr->set_p_partial(col, g_tipdata[col][key-1]);
       }
       else
       {
@@ -217,6 +217,10 @@ void Tree::calc_p_partials(int col)
         curr->set_p_partial(col, (left->get_P() * left->get_p_partial(col)).cwiseProduct(right->get_P() * right->get_p_partial(col)));
       }
       curr->set_visited(true);
+    }
+    else
+    {
+      curr->set_p_partial(col, curr->get_p_partial(col-1));
     }
   }
 }
