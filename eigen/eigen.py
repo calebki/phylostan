@@ -1,22 +1,31 @@
 import networkx as nx
-from Bio import Phylo
+from Bio import Phylo, SeqIO
 from io import StringIO
 import numpy as np
+import pystan
 
-example_newick = '((A:0.1,B:0.2):0.2,(C:0.3,D:0.4):0.5);'
-NUM_SITES = 5
-tip_data = {'A': 'acgta', 'B': 'gcta-', 'C': 'g--a-', 'D': 'ggg-a'}
+tree_file = 'example.tree'
+tip_data = SeqIO.to_dict(SeqIO.parse("example.nexus", "nexus"))
+NUM_SITES = len(next(iter(tip_data.values())))
 assert all(len(v) == NUM_SITES for v in tip_data.values())
 
 ## Tree parsing
-G = Phylo.to_networkx(Phylo.read(StringIO(example_newick), 'newick', rooted=True))
+G = Phylo.to_networkx(Phylo.read(tree_file, 'newick', rooted=True))
 # FIXME this just arbitrarily assigns the leaves to the first n nodes in some
 # way. Need to make sure it matches up with tip_data.
 print(G.nodes)
 n = len(tip_data)
 leaves = iter(range(n))
 interior = iter(range(n, 2 * n - 1))
-node_remap = {c: next(leaves if c.name is not None else interior) for c in G.nodes}
+node_remap = {}
+tip_remap = {}
+for c in G.nodes():
+    if c.name is not None:
+        node_id = next(leaves)
+        node_remap[c] = node_id
+        tip_remap[node_id] = tip_data[c.name]
+    else:
+        node_remap[c] = next(interior)
 G = nx.relabel_nodes(G, mapping=node_remap)
 postorder = list(nx.dfs_postorder_nodes(G))
 child_parent = [None] * len(G) # the i-th entry of child_parent is the parent of node i
@@ -32,7 +41,10 @@ np.fill_diagonal(Q, -3 * mu)
 encoding = dict(zip('actg', np.eye(4)))
 encoding['-'] = np.ones(4)
 print(tip_data)
-enc_tip = [np.transpose([encoding[vv] for vv in v]) for v in tip_data.values()] ## FIXME: ordering is arbitrary
+enc_tip = []
+for i in range(n):
+    v = tip_remap[i]
+    enc_tip.append(np.transpose([encoding[vv.lower()] for vv in v])) ## FIXME: ordering is arbitrary
 print(enc_tip)
 
 ## C++ interface
@@ -227,6 +239,14 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
 ))
 
 cppyy.cppdef('''
+vector<var> loglik(const vector<var>& blens) {
+      vector<double> times = value_of(blens);
+      ll = loglik(times);
+      return precomputed_gradients(ll.P_Y, blens, ll.grad);
+    }
+''')
+
+cppyy.cppdef('''
 int main(int argc, char** argv)
 {{
     std::vector<double> times = {{ {times} }};
@@ -238,8 +258,22 @@ int main(int argc, char** argv)
 '''.format(NUM_SITES=NUM_SITES, times=",".join(["1."] * (2 * n - 1)))
 )
 
-## make up some times to evaluate
+# make up some times to evaluate
 # n = len(tip_data)
 # times = [1.] * (2 * n - 2)
 # assert len(times) == len(postorder)
 # cppyy.gbl.loglik(tip_partials, child_parent, postorder, times)
+
+data = {'S':n, 'L':NUM_SITES, 'map':child_parent, 'rate':1.0, 'lower_root':0.0}
+seed = 1
+
+include_files = ["eigen.cpp"]
+sm = pystan.StanModel(file="example.stan",
+                      allow_undefined=True,
+                      includes=include_files,
+                      include_dirs=["."],
+                      verbose=True,
+                      extra_compile_args=["-Wno-int-in-bool-context"]
+                      )
+fit = sm.vb(data=data, iter=1000, algorithm='meanfield', seed = seed)
+print(fit['mean_pars'])
