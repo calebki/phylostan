@@ -1,6 +1,6 @@
 functions{
 	// transform node heights to proportion, except for the root
-	real loglik(vector blens);
+	real pruning_loglik(vector blens);
 	real[] transform(real[] p, real rootHeight, int[,] map){
 		int S = size(p)+2;
 		int nodeCount = S*2-1;
@@ -131,7 +131,7 @@ model{
 		}
 	}
 
-	target += loglik(blens);
+	target += pruning_loglik(blens);
 	
 	// add log det jacobian
 	for( i in 2:nodeCount ){

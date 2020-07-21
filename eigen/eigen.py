@@ -59,18 +59,15 @@ class MyCppyy:
     def cppdef(self, source):
         print(source, file=self.f)
 
-cppyy = MyCppyy('eigen.cpp')
+cppyy = MyCppyy('eigen.hpp')
 
-cppyy.add_include_path("/usr/include/eigen3")
-cppyy.include("Eigen/Dense")
-cppyy.include("algorithm")
-cppyy.include("iostream")
-cppyy.include("cassert")
-cppyy.include("vector")
-cppyy.include("unordered_map")
+for inc in "Eigen/Dense", "algorithm", "iostream", "cassert", "vector", "map":
+    cppyy.cppdef("#include <%s>" % inc)
 
 cppyy.cppdef('''
-#include "prettyprint.hpp"
+// #include "prettyprint.hpp"
+
+using std::map;
 
 template <int num_sites>
 using Partial = Eigen::Matrix<double, 4, num_sites>;
@@ -82,7 +79,7 @@ template <int num_sites>
 using PartialVector = std::vector<Partial<num_sites>, Eigen::aligned_allocator<Partial<num_sites> > >;
 
 template <int num_sites>
-using PartialNodeMap = std::unordered_map<int, Partial<num_sites>, std::hash<int>, std::equal_to<int>,
+using PartialNodeMap = map<int, Partial<num_sites>, std::less<int>,
                            Eigen::aligned_allocator<std::pair<const int, Partial<num_sites> > > >;
 ''')
 
@@ -123,11 +120,12 @@ struct transition_matrix {
 ## Calculate likelihood
 cppyy.cppdef('''
 struct value_grad {
-    Eigen::MatrixXd P_Y, grad;
+    double log_P;
+    Eigen::VectorXd grad;
 };
 
 // template <int num_sites>
-value_grad loglik(/*PartialVector<num_sites> tip_partials,
+value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
               std::vector<int> child_parent,
               std::vector<int> postorder,*/
               std::vector<double> times)
@@ -156,7 +154,7 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
 
     // create a mapping of the (two) child nodes of each parent
     int parent, child;
-    std::unordered_map<int, std::pair<int, int> > parent_child;
+    map<int, std::pair<int, int> > parent_child;
     for (int i = 0; i < child_parent.size(); ++i)
     {
         parent = child_parent.at(i);
@@ -170,7 +168,7 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
     // std::cout << "parent_child: " << parent_child << std::endl;
 
     // create a mapping of each child's sibling, i.e. the other child of its parent
-    std::unordered_map<int, int> sibling;
+    map<int, int> sibling;
     for (auto &kv : parent_child)
     {
         std::pair<int, int> &p = kv.second;
@@ -227,11 +225,12 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
 
     // finally compute gradients from equation 9
     value_grad ret;
-    ret.P_Y = pi.transpose() * postorder_partials.back();  // the overall likelihood is pi * the root partial
-    ret.grad.resize(num_nodes, num_sites);
+    Eigen::VectorXd P_Y = pi.transpose() * postorder_partials.back();  // the overall likelihood is pi * the root partial
+    ret.log_P = P_Y.array().log().sum();
+    Eigen::MatrixXd grad(num_nodes, num_sites);
     for (int i = 0; i < num_nodes; ++i)
-        ret.grad.row(i) = ((times[i] * Q.transpose()) * preorder_partials.at(i)).cwiseProduct(postorder_partials.at(i)).colwise().sum();
-    ret.grad *= (1. / ret.P_Y.array()).matrix().asDiagonal();
+        grad.row(i) = ((times[i] * Q.transpose()) * preorder_partials.at(i)).cwiseProduct(postorder_partials.at(i)).colwise().sum();
+    ret.grad = grad * (1. / P_Y.array()).matrix();
     return ret;
 }
 ''' % (
@@ -240,24 +239,39 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
 ))
 
 cppyy.cppdef('''
-vector<var> loglik(const vector<var>& blens) {
-      vector<double> times = value_of(blens);
-      ll = loglik(times);
-      return precomputed_gradients(ll.P_Y, blens, ll.grad);
-    }
+double pruning_loglik(const Eigen::Matrix<double, Eigen::Dynamic, 1>& blens, std::ostream*) 
+{
+    vector<double> times;
+    for (int i = 0; i < blens.rows(); ++i) times.push_back(blens(i));
+    value_grad ll = vbsky_loglik(times);
+    return ll.log_P;
+}
+
+stan::math::var pruning_loglik(const Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>& blens, std::ostream*) 
+{
+    vector<var> blens_v;
+    for (int i = 0; i < blens.rows(); ++i) blens_v.push_back(blens(i));
+    value_grad ll = vbsky_loglik(value_of(blens_v));
+    vector<double> grad;
+    for (int i = 0; i < ll.grad.rows(); ++i) grad.push_back(ll.grad(i));
+    return precomputed_gradients(ll.log_P, blens_v, grad);
+}
 ''')
 
-cppyy.cppdef('''
-int main(int argc, char** argv)
-{{
-    std::vector<double> times = {{ {times} }};
-    value_grad ll = loglik(/*tip_partials, child_parent, postorder,*/ times);
-    std::cout << ll.P_Y << std::endl;
-    std::cout << ll.grad << std::endl;
+# cppyy.cppdef('''
+# int main(int argc, char** argv)
+# {{
+#     std::vector<double> times = {{ {times} }};
+#     value_grad ll = loglik(/*tip_partials, child_parent, postorder,*/ times);
+#     std::cout << ll.P_Y << std::endl;
+#     std::cout << ll.grad << std::endl;
+# 
+# }}
+#
+# '''.format(times=",".join(["1."] * (2 * n - 1)))
+# )
 
-}}
-'''.format(times=",".join(["1."] * (2 * n - 1)))
-)
+cppyy = None  # close filehandle and write file
 
 # make up some times to evaluate
 # n = len(tip_data)
@@ -268,13 +282,14 @@ int main(int argc, char** argv)
 data = {'S':n, 'L':NUM_SITES, 'map':child_parent, 'rate':1.0, 'lower_root':0.0}
 seed = 1
 
-include_files = ["eigen.cpp"]
+include_files = ["eigen.hpp"]
+
 sm = pystan.StanModel(file="example.stan",
                       allow_undefined=True,
                       includes=include_files,
                       include_dirs=["."],
                       verbose=True,
-                      extra_compile_args=["-Wno-int-in-bool-context"]
+                      extra_compile_args=["--std=c++14", "-Wno-int-in-bool-context"]  # "-Wfatal-errors", 
                       )
 fit = sm.vb(data=data, iter=1000, algorithm='meanfield', seed = seed)
 print(fit['mean_pars'])
