@@ -126,7 +126,7 @@ struct value_grad {
     Eigen::MatrixXd P_Y, grad;
 };
 
-template <int num_sites>
+// template <int num_sites>
 value_grad loglik(/*PartialVector<num_sites> tip_partials,
               std::vector<int> child_parent,
               std::vector<int> postorder,*/
@@ -149,7 +149,8 @@ value_grad loglik(/*PartialVector<num_sites> tip_partials,
 
     transition_matrix trans(Q);
 
-    PartialVector<num_sites> postorder_partials(tip_partials), preorder_partials(num_nodes);  // denoted a p, q in m.s.
+    decltype(tip_partials) postorder_partials(tip_partials), preorder_partials(num_nodes);  // denoted a p, q in m.s.
+    const int num_sites = decltype(tip_partials)::value_type::ColsAtCompileTime;
     // enlarge partials to accomodate interior partials; entries 0, ..., num_leaves - 1 are the partials at the tips
     postorder_partials.resize(num_nodes);
 
@@ -250,12 +251,12 @@ cppyy.cppdef('''
 int main(int argc, char** argv)
 {{
     std::vector<double> times = {{ {times} }};
-    value_grad ll = loglik<{NUM_SITES}>(/*tip_partials, child_parent, postorder,*/ times);
+    value_grad ll = loglik(/*tip_partials, child_parent, postorder,*/ times);
     std::cout << ll.P_Y << std::endl;
     std::cout << ll.grad << std::endl;
 
 }}
-'''.format(NUM_SITES=NUM_SITES, times=",".join(["1."] * (2 * n - 1)))
+'''.format(times=",".join(["1."] * (2 * n - 1)))
 )
 
 # make up some times to evaluate
