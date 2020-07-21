@@ -115,9 +115,9 @@ struct value_grad {
 };
 
 template <int num_sites>
-value_grad loglik(PartialVector<num_sites> tip_partials,
+value_grad loglik(/*PartialVector<num_sites> tip_partials,
               std::vector<int> child_parent,
-              std::vector<int> postorder,
+              std::vector<int> postorder,*/
               std::vector<double> times)
 {
     %s
@@ -214,7 +214,7 @@ value_grad loglik(PartialVector<num_sites> tip_partials,
 
     // finally compute gradients from equation 9
     value_grad ret;
-    ret.P_Y = pi.transpose() * postorder_partials.back();
+    ret.P_Y = pi.transpose() * postorder_partials.back();  // the overall likelihood is pi * the root partial
     ret.grad.resize(num_nodes, num_sites);
     for (int i = 0; i < num_nodes; ++i)
         ret.grad.row(i) = ((times[i] * Q.transpose()) * preorder_partials.at(i)).cwiseProduct(postorder_partials.at(i)).colwise().sum();
@@ -230,12 +230,12 @@ cppyy.cppdef('''
 int main(int argc, char** argv)
 {{
     std::vector<double> times = {{ {times} }};
-    value_grad ll = loglik(tip_partials, child_parent, postorder, times);
+    value_grad ll = loglik<{NUM_SITES}>(/*tip_partials, child_parent, postorder,*/ times);
     std::cout << ll.P_Y << std::endl;
     std::cout << ll.grad << std::endl;
 
 }}
-'''.format(times=",".join(["1."] * (2 * n - 1)))
+'''.format(NUM_SITES=NUM_SITES, times=",".join(["1."] * (2 * n - 1)))
 )
 
 ## make up some times to evaluate
