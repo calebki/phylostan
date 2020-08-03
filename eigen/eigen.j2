@@ -78,7 +78,7 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
     const int num_nodes = postorder.size();
     const int num_leaves = tip_partials.size();
     assert(num_nodes == 2 * num_leaves - 1);
-    assert(times.size() == postorder.size());
+    assert(times.size() == postorder.size() - 1);
 
     transition_matrix trans(Q);
 
@@ -126,7 +126,7 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
     {
         parent = postorder.at(i);
         if (parent < num_leaves) continue;  // node is a leaf node; partial has already been populated
-        postorder_partials.at(i) = Partial<num_sites>::Ones();
+        postorder_partials.at(parent) = Partial<num_sites>::Ones();
         std::pair<int, int> &p = parent_child.at(parent);
         // std::cout << "po-p parent=" << parent << " ";
         for (int child : {p.first, p.second})
@@ -137,9 +137,9 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
             // We have: p_parent = P[i] * p_child = P exp(t * d) P^{-1} @ partial[child]
             Pi_pi.insert({child, trans.exp_tQ(times.at(child)) * postorder_partials.at(child)});
             // std::cout << " Pi_pi[child]=" << std::endl << Pi_pi[child] << std::endl;
-            postorder_partials.at(i) = postorder_partials.at(i).cwiseProduct(Pi_pi.at(child));
+            postorder_partials.at(parent) = postorder_partials.at(parent).cwiseProduct(Pi_pi.at(child));
         }
-        // std::cout << "partial=" << std::endl << postorder_partials[i] << std::endl << std::endl;
+        // std::cout << "partial=" << std::endl << postorder_partials[parent] << std::endl << std::endl;
         // std::cout << "postorder_partials: " << std::endl << postorder_partials;
     }
 
