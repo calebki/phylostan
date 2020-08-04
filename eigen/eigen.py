@@ -4,6 +4,7 @@ from io import StringIO
 import numpy as np
 import pystan
 import jinja2
+import scipy.sparse
 
 tree_file = 'example.tree'
 tip_data = SeqIO.to_dict(SeqIO.parse("example.nexus", "nexus"))
@@ -49,22 +50,27 @@ encoding = dict(zip('actg', np.eye(4)))
 encoding['-'] = np.ones(4)
 print(tip_data)
 tip_partials = []
+sparse_tip_partials = []
 for i in range(n):
     v = tip_remap[i]
     tip_partials.append(np.transpose([encoding[vv.lower()] for vv in v])) ## FIXME: ordering is arbitrary
+    sp = scipy.sparse.coo_matrix(tip_partials[-1])
+    sparse_tip_partials.append(zip(sp.row, sp.col, sp.data))
 print(tip_partials)
 
 ## Write C++ header file
 hpp = jinja2.Template(open('eigen.j2', 'rt').read())
 with open("eigen.hpp", "wt") as out:
-    s = hpp.render(child_parent=child_parent, postorder=postorder, Q=Q, pi=pi, tip_partials=tip_partials, num_sites=NUM_SITES)
+    s = hpp.render(child_parent=child_parent, postorder=postorder, Q=Q, pi=pi, 
+                   tip_partials=tip_partials, sparse_tip_partials=sparse_tip_partials, 
+                   num_sites=NUM_SITES)
     out.write(s)
 
 # encode partials
 data = {'S':n, 'L':NUM_SITES, 'map':preorder_map, 'rate':1.0, 'lower_root':0.0}
 seed = 1
 
-include_files = ["eigen.hpp"]
+include_files = ["eigen.hpp", "prune_stan.hpp"]
 
 sm = pystan.StanModel(file="example.stan",
                       allow_undefined=True,
@@ -73,5 +79,6 @@ sm = pystan.StanModel(file="example.stan",
                       verbose=True,
                       extra_compile_args=["--std=c++14", "-Wno-int-in-bool-context"]  # "-Wfatal-errors", 
                       )
+
 fit = sm.vb(data=data, iter=1000, algorithm='meanfield', seed = seed)
 print(fit['mean_pars'][fit['mean_par_names']=='theta'])

@@ -1,26 +1,20 @@
 #include <Eigen/Dense>
+#include <Eigen/SparseCore>
 #include <algorithm>
 #include <iostream>
 #include <cassert>
 #include <vector>
 #include <map>
 
-// #include "prettyprint.hpp"
+#include "value_grad.hpp"
 
 using std::map;
+using std::vector;
 
-template <int num_sites>
-using Partial = Eigen::Matrix<double, 4, num_sites>;
-
-template <typename Derived>
-void assign(Eigen::MatrixBase<Derived> &m, int i, int j, double x) { m(i,j) = x; }
-
-template <int num_sites>
-using PartialVector = std::vector<Partial<num_sites>, Eigen::aligned_allocator<Partial<num_sites> > >;
-
-template <int num_sites>
-using PartialNodeMap = map<int, Partial<num_sites>, std::less<int>,
-                           Eigen::aligned_allocator<std::pair<const int, Partial<num_sites> > > >;
+typedef Eigen::SparseMatrix<double> SpMat;
+typedef Eigen::Matrix<double, 4, {{num_sites}}> Partial;
+typedef vector<Partial> PartialVector;
+typedef map<int, Partial> PartialNodeMap;
 
 const std::vector<int> child_parent = { 
     {{ child_parent | join(',') }}
@@ -30,9 +24,13 @@ const std::vector<int> postorder = {
     {{ postorder | join(',') }}
 };
 
-PartialVector<{{num_sites}}> tip_partials = {
-    {% for tp in tip_partials %}
-    (Partial<{{num_sites}}>() << {{ tp.reshape(-1).tolist() | join(',') }} ).finished(),
+const vector<vector<Eigen::Triplet<double> > > sparse_tip_partials = {
+    {% for tp in sparse_tip_partials %}
+    {
+    {% for i, j, v in tp %}
+        { {{i}}, {{j}}, {{v}} },
+    {% endfor %}
+    },
     {% endfor %}
 };
 
@@ -50,22 +48,12 @@ struct transition_matrix {
 
     Eigen::Matrix4d exp_tQ (const double t)
     {
-        Eigen::Matrix4d ret = (P * ((t * d).array().exp().matrix().asDiagonal()) * Pinv).real();
-        return ret;
+        return (P * ((t * d).array().exp().matrix().asDiagonal()) * Pinv).real();
     }
 };
 
 
-struct value_grad {
-    double log_P;
-    Eigen::VectorXd grad;
-};
-
-// template <int num_sites>
-value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
-              std::vector<int> child_parent,
-              std::vector<int> postorder,*/
-              std::vector<double> times)
+value_grad vbsky_loglik(const vector<double> &times)
 {
     /*
        Compute the likeliood of alignment using pruning algorithm given:
@@ -76,14 +64,21 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
            times: times[i] is the branch length above node i. same length as postorder; entry for root is ignored.
     */
     const int num_nodes = postorder.size();
+    const int num_sites = {{num_sites}};
+    vector<Partial> tip_partials;
+    SpMat m(4, {{num_sites}});
+    for (auto &v : sparse_tip_partials) 
+    {
+        m.setFromTriplets(v.begin(), v.end());
+        tip_partials.push_back(m);
+    }
     const int num_leaves = tip_partials.size();
     assert(num_nodes == 2 * num_leaves - 1);
     assert(times.size() == postorder.size() - 1);
 
     transition_matrix trans(Q);
 
-    decltype(tip_partials) postorder_partials(tip_partials), preorder_partials(num_nodes);  // denoted a p, q in m.s.
-    const int num_sites = decltype(tip_partials)::value_type::ColsAtCompileTime;
+    PartialVector postorder_partials(tip_partials), preorder_partials(num_nodes);  // denoted a p, q in m.s.
     // enlarge partials to accomodate interior partials; entries 0, ..., num_leaves - 1 are the partials at the tips
     postorder_partials.resize(num_nodes);
 
@@ -118,15 +113,16 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
     // to `diag(exp(d * t)) P^T A = P^T B`.
     // Eigen::PartialPivLU<Partial> P_T_lu(P.transpose());
 
-    PartialNodeMap<num_sites> Pi_pi;  // P[i] @ p[i]
-    Partial<num_sites> A;
+    PartialNodeMap Pi_pi;  // P[i] @ p[i]
+    Partial A;
+    Eigen::Matrix4d B;
 
     // Compute all postorder partials
     for (int i = 0; i < postorder.size(); ++i)
     {
         parent = postorder.at(i);
         if (parent < num_leaves) continue;  // node is a leaf node; partial has already been populated
-        postorder_partials.at(parent) = Partial<num_sites>::Ones();
+        postorder_partials.at(parent) = Partial::Ones(4, num_sites);
         std::pair<int, int> &p = parent_child.at(parent);
         // std::cout << "po-p parent=" << parent << " ";
         for (int child : {p.first, p.second})
@@ -151,8 +147,9 @@ value_grad vbsky_loglik(/*PartialVector<num_sites> tip_partials,
         parent = child_parent.at(child);
         // Equation (7)
         A = preorder_partials.at(parent).cwiseProduct(Pi_pi.at(sibling.at(child)));
+        B = trans.exp_tQ(times.at(child)).transpose();
         // preorder_partials[child] = q[i] = P[i]^T @ A = Pinv.T @ e^(t[i] d) @ P.T @ A
-        preorder_partials.at(child) = trans.exp_tQ(times.at(child)).transpose() * A;
+        preorder_partials.at(child) = B * A;
         /* std::cout << "preorder_partials child=" << child << " sibling=" << sibling[child] << 
                       " Pi_pi[sibling[child]]=" << Pi_pi[sibling[child]] << " q[child]=" << 
                       std::endl << preorder_partials[child] << std::endl; */
@@ -178,12 +175,3 @@ double pruning_loglik(const Eigen::Matrix<double, Eigen::Dynamic, 1>& blens, std
     return ll.log_P;
 }
 
-stan::math::var pruning_loglik(const Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>& blens, std::ostream*) 
-{
-    vector<var> blens_v;
-    for (int i = 0; i < blens.rows(); ++i) blens_v.push_back(blens(i));
-    value_grad ll = vbsky_loglik(value_of(blens_v));
-    vector<double> grad;
-    for (int i = 0; i < ll.grad.rows(); ++i) grad.push_back(ll.grad(i));
-    return precomputed_gradients(ll.log_P, blens_v, grad);
-}
