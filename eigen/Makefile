@@ -1,7 +1,10 @@
 all: python cpp
 
-python:
-	python eigen.py
+python: example.tree example.nexus
+	./eigen.py
 
-cpp:
+eigen.hpp: example.tree example.nexus
+	./eigen.py --header-only
+
+cpp: eigen.hpp
 	g++ -I/usr/include/eigen3 -g -O0 -o eigen eigen.cpp
