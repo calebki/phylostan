@@ -24,7 +24,7 @@ const std::vector<int> postorder = {
     {{ postorder | join(',') }}
 };
 
-const vector<vector<Eigen::Triplet<double> > > sparse_tip_partials = {
+static const vector<vector<Eigen::Triplet<double> > > sparse_tip_partials = {
     {% for tp in sparse_tip_partials %}
     {
     {% for i, j, v in tp %}
@@ -65,12 +65,13 @@ value_grad vbsky_loglik(const vector<double> &times)
     */
     const int num_nodes = postorder.size();
     const int num_sites = {{num_sites}};
-    vector<Partial> tip_partials;
+    vector<Partial> tip_partials(sparse_tip_partials.size());
     SpMat m(4, {{num_sites}});
     for (auto &v : sparse_tip_partials) 
     {
         m.setFromTriplets(v.begin(), v.end());
-        tip_partials.push_back(m);
+        auto i = &v - &sparse_tip_partials[0];
+        tip_partials[i] = m;
     }
     const int num_leaves = tip_partials.size();
     assert(num_nodes == 2 * num_leaves - 1);
